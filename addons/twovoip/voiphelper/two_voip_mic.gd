@@ -20,8 +20,8 @@ var audiosampleframetextureimage : Image
 var audiosampleframetexture : ImageTexture
 var audiosampleframematerial = null
 
-signal transmitaudiopacket(opuspacket, opusframecount)
-signal transmitaudiojsonpacket(audiostreampacketheader)
+signal transmitaudiopacket(opuspacket : PackedByteArray, opusframecount : int)
+signal transmitaudiojsonpacket(audiostreampacketheader : Dictionary)
 
 const rootmeansquaremaxmeasurement = false
 
@@ -36,30 +36,33 @@ var frametimesecs = 0.02
 var opussamplerate = 48000
 var opuschannels = 2
 func setopusvalues(p_opussamplerate, opusframedurationms, p_channels, opusbitrate, opuscomplexity, opusoptimizeforvoice):
+	processtalkstreamends(false)
+	assert (not currentlytalking)
+
 	opussamplerate = p_opussamplerate
 	opuschannels = p_channels
 	opusencoder.create_sampler(AudioServer.get_input_mix_rate(), opussamplerate, opuschannels, denoisebutton.button_pressed)
 	opusencoder.create_opus_encoder(opusbitrate, opuscomplexity, opusoptimizeforvoice)
-	# optimize for voice
-
-	assert (not currentlytalking)
 	opus_chunk_size = int(opussamplerate*opusframedurationms/1000.0)
 	audio_chunk_size = opusencoder.calc_audio_chunk_size(opus_chunk_size)
 	frametimesecs = opusframedurationms/1000.0
-
-	var audiosampleframedata = PackedVector2Array()
-	audiosampleframedata.resize(audio_chunk_size)
-	for j in range(audio_chunk_size):
-		audiosampleframedata.set(j, Vector2(-0.5,0.9) if (j%10)<5 else Vector2(0.6,0.1))
-	audiosampleframetextureimage = Image.create_from_data(audio_chunk_size, 1, false, Image.FORMAT_RGF, audiosampleframedata.to_byte_array())
-	audiosampleframetexture = ImageTexture.create_from_image(audiosampleframetextureimage)
-	audiosampleframematerial.set_shader_parameter("chunktexture", audiosampleframetexture)
+	if audiosampleframematerial:
+		var audiosampleframedata = PackedVector2Array()
+		audiosampleframedata.resize(audio_chunk_size)
+		for j in range(audio_chunk_size):
+			audiosampleframedata.set(j, Vector2(-0.5,0.9) if (j%10)<5 else Vector2(0.6,0.1))
+		audiosampleframetextureimage = Image.create_from_data(audio_chunk_size, 1, false, Image.FORMAT_RGF, audiosampleframedata.to_byte_array())
+		audiosampleframetexture = ImageTexture.create_from_image(audiosampleframetextureimage)
+		audiosampleframematerial.set_shader_parameter("chunktexture", audiosampleframetexture)
 
 var miconbutton: Button = null
 var optioninputdevice: OptionButton = null
 var pttbutton: Button = null
 var voxbutton: Button = null
 var denoisebutton: Button = null
+
+func _ready():
+	set_process(false)
 
 func _on_miconbutton(toggled_on):
 	if toggled_on:
@@ -96,35 +99,43 @@ func _on_vox_toggled(toggled_on):
 
 func initvoipmic(lmiconbutton: Button, loptioninputdevice: OptionButton, lpttbutton: Button, lvoxbutton: Button, ldenoisebutton: Button, laudiosampleframematerial: Material):
 	miconbutton = lmiconbutton
-	assert(miconbutton.toggle_mode == true)
 	if miconbutton == null:
 		miconbutton = Button.new()
 		miconbutton.toggle_mode = true
 		miconbutton.button_pressed = true
+	assert(miconbutton.toggle_mode, "MicOn must be a toggle button")
+	miconbutton.connect("toggled", _on_miconbutton)
+	_on_miconbutton(miconbutton.button_pressed)
+
 	pttbutton = (lpttbutton if lpttbutton else Button.new())
+
 	voxbutton = lvoxbutton
 	if voxbutton == null:
 		voxbutton = Button.new()
 		voxbutton.toggle_mode = true
 		voxbutton.button_pressed = true
+	assert(voxbutton.toggle_mode, "Vox must be a toggle button")
+	voxbutton.connect("toggled", _on_vox_toggled)
+	_on_vox_toggled(voxbutton.button_pressed)
+
 	denoisebutton = ldenoisebutton
 	if denoisebutton == null:
 		denoisebutton = Button.new()
 		denoisebutton.toggle_mode = true
+	assert(denoisebutton.toggle_mode, "Denoise must be a toggle button")
+
 	audiosampleframematerial = laudiosampleframematerial
 	
-	assert(miconbutton.toggle_mode == true)
 	optioninputdevice = loptioninputdevice if loptioninputdevice else OptionButton.new()
 	assert(optioninputdevice.item_count == 0)
 	for d in AudioServer.get_input_device_list():
 		optioninputdevice.add_item(d)
 	assert(optioninputdevice.get_item_text(optioninputdevice.selected) == "Default")
 	optioninputdevice.connect("item_selected", _on_optioninputdevice)
-	miconbutton.connect("toggled", _on_miconbutton)
-	voxbutton.connect("toggled", _on_vox_toggled)
 
-func processtalkstreamends():
-	var talking = pttbutton.button_pressed
+	set_process(true)
+
+func processtalkstreamends(talking: bool):
 	if talking and not currentlytalking:
 		talkingtimestart = Time.get_ticks_msec()*0.001
 		var leadframes = leadtime/frametimesecs
@@ -139,6 +150,7 @@ func processtalkstreamends():
 			"opuschannels":opuschannels,
 			"lenchunkprefix":len(chunkprefix), 
 			"opusstreamcount":opusstreamcount, 
+			"opusframecount":0,
 			"talkingtimestart":talkingtimestart
 		}
 		opusencoder.reset_opus_encoder()
@@ -163,39 +175,43 @@ func processtalkstreamends():
 
 func set_voxthreshhold(lvoxthreshhold):
 	voxthreshhold = lvoxthreshhold
-	audiosampleframematerial.set_shader_parameter("voxthreshhold", voxthreshhold)
+	if audiosampleframematerial:
+		audiosampleframematerial.set_shader_parameter("voxthreshhold", voxthreshhold)
 
 func set_gain(gain):
 	print("set microphone gain to ", gain)
 	microphone_gain = gain
 
 func processvox(chunkmax, audio_chunk):
-	if denoisebutton.button_pressed:
-		var speechnoiseprobability = chunkmax
-		audiosampleframematerial.set_shader_parameter("speechnoiseprobability", speechnoiseprobability)
-	audiosampleframematerial.set_shader_parameter("chunkmax", chunkmax)
+	if audiosampleframematerial:
+		if denoisebutton.button_pressed:
+			audiosampleframematerial.set_shader_parameter("speechnoiseprobability", chunkmax)
+		audiosampleframematerial.set_shader_parameter("chunkmax", chunkmax)
+
 	if chunkmax >= voxthreshhold:
 		if voxbutton.button_pressed and not pttbutton.button_pressed:
 			pttbutton.button_pressed = true
 		hangframescountup = 0
 		if chunkmax > chunkmaxpersist:
 			chunkmaxpersist = chunkmax
-			audiosampleframematerial.set_shader_parameter("chunkmaxpersist", chunkmaxpersist)
+			if audiosampleframematerial:
+				audiosampleframematerial.set_shader_parameter("chunkmaxpersist", chunkmaxpersist)
 	else:
 		if hangframescountup == hangframes:
 			if voxbutton.button_pressed:
 				pttbutton.button_pressed = false
 			chunkmaxpersist = 0.0
-			audiosampleframematerial.set_shader_parameter("chunkmaxpersist", chunkmaxpersist)
+			if audiosampleframematerial:
+				audiosampleframematerial.set_shader_parameter("chunkmaxpersist", chunkmaxpersist)
 		hangframescountup += 1
 
-	if pttbutton.button_pressed:
-		audiosampleframematerial.set_shader_parameter("chunktexenabled", true)
-		audiosampleframetextureimage.set_data(audio_chunk_size, 1, false, Image.FORMAT_RGF, audio_chunk.to_byte_array())
-		audiosampleframetexture.update(audiosampleframetextureimage)
-
-	else:
-		audiosampleframematerial.set_shader_parameter("chunktexenabled", false)
+	if audiosampleframematerial:
+		if pttbutton.button_pressed:
+			audiosampleframematerial.set_shader_parameter("chunktexenabled", true)
+			audiosampleframetextureimage.set_data(audio_chunk_size, 1, false, Image.FORMAT_RGF, audio_chunk.to_byte_array())
+			audiosampleframetexture.update(audiosampleframetextureimage)
+		else:
+			audiosampleframematerial.set_shader_parameter("chunktexenabled", false)
 
 func processopuschunk():
 	assert(currentlytalking)
@@ -213,7 +229,7 @@ var last_chunkmax = 0.0
 
 func _process(delta):
 	microphoneaudiosamplescountSeconds += delta
-	processtalkstreamends()
+	processtalkstreamends(pttbutton.button_pressed)
 	while true:
 		audio_chunk = AudioServer.get_input_frames(opusencoder.calc_audio_chunk_size(opus_chunk_size))
 		if len(audio_chunk) == 0:

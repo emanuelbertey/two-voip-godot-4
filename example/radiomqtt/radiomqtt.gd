@@ -41,7 +41,7 @@ func _ready():
 		h.connect("toggled", func (_toggled_on): updatesamplerates())
 
 	$TwoVoipMic.initvoipmic($HBoxMicTalk/MicWorking, $HBoxInputDevice/OptionInputDevice, $HBoxBigButtons/VBoxPTT/PTT, $HBoxBigButtons/VBoxVox/Vox, $HBoxBigButtons/VBoxPTT/Denoise, $HBoxMicTalk/VoxThreshold.material)
-	$TwoVoipMic.set_voxthreshhold(0.07)
+	$TwoVoipMic.set_voxthreshhold(0.017)
 
 	for d in AudioServer.get_output_device_list():
 		$HBoxOutputDevice/OptionOutputDevice.add_item(d)
