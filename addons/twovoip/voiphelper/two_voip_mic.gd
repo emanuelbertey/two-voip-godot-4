@@ -36,17 +36,16 @@ var frametimesecs = 0.02
 var opussamplerate = 48000
 var opuschannels = 2
 func setopusvalues(p_opussamplerate, opusframedurationms, p_channels, opusbitrate, opuscomplexity, opusoptimizeforvoice):
+	processtalkstreamends(false)
+	assert (not currentlytalking)
+
 	opussamplerate = p_opussamplerate
 	opuschannels = p_channels
 	opusencoder.create_sampler(AudioServer.get_input_mix_rate(), opussamplerate, opuschannels, denoisebutton.button_pressed)
 	opusencoder.create_opus_encoder(opusbitrate, opuscomplexity, opusoptimizeforvoice)
-	# optimize for voice
-
-	assert (not currentlytalking)
 	opus_chunk_size = int(opussamplerate*opusframedurationms/1000.0)
 	audio_chunk_size = opusencoder.calc_audio_chunk_size(opus_chunk_size)
 	frametimesecs = opusframedurationms/1000.0
-
 	if audiosampleframematerial:
 		var audiosampleframedata = PackedVector2Array()
 		audiosampleframedata.resize(audio_chunk_size)
@@ -136,8 +135,7 @@ func initvoipmic(lmiconbutton: Button, loptioninputdevice: OptionButton, lpttbut
 
 	set_process(true)
 
-func processtalkstreamends():
-	var talking = pttbutton.button_pressed
+func processtalkstreamends(talking: bool):
 	if talking and not currentlytalking:
 		talkingtimestart = Time.get_ticks_msec()*0.001
 		var leadframes = leadtime/frametimesecs
@@ -231,7 +229,7 @@ var last_chunkmax = 0.0
 
 func _process(delta):
 	microphoneaudiosamplescountSeconds += delta
-	processtalkstreamends()
+	processtalkstreamends(pttbutton.button_pressed)
 	while true:
 		audio_chunk = AudioServer.get_input_frames(opusencoder.calc_audio_chunk_size(opus_chunk_size))
 		if len(audio_chunk) == 0:
