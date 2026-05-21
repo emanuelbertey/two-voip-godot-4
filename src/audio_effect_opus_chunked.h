@@ -162,8 +162,6 @@ public:
     void push_chunk(const PackedVector2Array& audiosamples); 
 
     void resampled_current_chunk();
-    float denoise_resampled_chunk();
-    bool denoiser_available();
     PackedVector2Array read_chunk(bool resampled=false);
     float chunk_max(bool rms=false, bool resampled=false);
 
