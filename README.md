@@ -2,8 +2,7 @@
 
 Welcome to the GodotEngine GDExtension [twovoip](https://godotengine.org/asset-library/asset/3169) 
 that applies the [xiph/opus](https://github.com/xiph/opus) compression library 
-(and optionally the [xiph/rnnoise](https://github.com/xiph/rnnoise) de-noiser and 
-[OVRLipSync](https://developer.oculus.com/documentation/native/audio-ovrlipsync-native/) viseme detector)
+(and optionally [OVRLipSync](https://developer.oculus.com/documentation/native/audio-ovrlipsync-native/) viseme detector)
 to an audio stream of speech from the microphone. 
 The starting point for this project was [one-voip-godot-4](https://github.com/RevoluPowered/one-voip-godot-4/).
 
@@ -33,9 +32,7 @@ If there is no response on MacOS, it could be [this issue](https://github.com/qu
 Go to Project Settings (with Advanced Settings selected) -> Audio -> Driver -> Mix rate and set to 48000
 
 The top section of the user interface has the PTT (Press to Talk) button and Vox button (Voice Activity Detection) where the 
-activation threshold is given in the slider below it (on top of the waveform). 
-Click on \[De-noise\] to hear how recordings 
-sound with and without this feature.
+activation threshold is given in the slider below it (on top of the waveform).
 
 #### A Note about the sample rates
 There are two different `mix_rates` values in the GodotEngine that vary according to platform:  
@@ -46,7 +43,7 @@ Additionally, an `AudioStream` can have its own `mix_rate`, and the resampling r
 
 All combinations are exposed in the `TwoVoip` plugin and the example project to help you work out what settings are correct.  If you record and playback on the same system then wrong settings can cancel out and make it appear that a bad signal between different systems is due to the transmission.  The common problems are playing a 48KHz stream at 44.1KHz which will sound slow and off-key, or playing a decoded 44.1KHz stream from a network at 48KHz which will result in small gaps between the packets that are being consumed too fast and can sound like analog radio static distortion (which is impossible).
 
-Because the Opus Compression and RNNoise libraries only work at certain sample rates (none of which are 44.1KHz) the `AudioEffectOpusChunked` class has an internal resampler, though this could have been implemented by setting the `pitch_scale` to 0.91875=44100/48000.  Similarly on the output the `AudioStreamOpusChunked` class also has a resampler that could be made redundant by tinkering with the `pitch_scale` and `mix_rate`.  The properties of these classes are controlled by the frame size and sample rate instead of sample time to make it clear that these all relate to known fixed width arrays of floating point values.  In fact the entire library can operate independently of the audio system and just on these Packed Arrays.
+Because the Opus compression library only works at certain sample rates (none of which are 44.1KHz) the `AudioEffectOpusChunked` class has an internal resampler, though this could have been implemented by setting the `pitch_scale` to 0.91875=44100/48000.  Similarly on the output the `AudioStreamOpusChunked` class also has a resampler that could be made redundant by tinkering with the `pitch_scale` and `mix_rate`.  The properties of these classes are controlled by the frame size and sample rate instead of sample time to make it clear that these all relate to known fixed width arrays of floating point values.  In fact the entire library can operate independently of the audio system and just on these Packed Arrays.
 
 ![image](https://github.com/user-attachments/assets/4928a06c-15c2-4e9e-a71c-d2de26d03856)
 
@@ -139,9 +136,9 @@ so you can avoid clipping at the start of a speech sequence.
 
 ## Build structure
 
-There are three submodules in this repository.  
+There are two submodules in this repository.  
 
-**godot-cpp** is contains the header files and class definitions required to build a compiled 
+**godot-cpp** contains the header files and class definitions required to build a compiled 
 [GDExtension](https://docs.godotengine.org/en/stable/tutorials/scripting/gdextension/what_is_gdextension.html) object that can 
 dynamically link to the GodotEngine at runtime.
 
@@ -149,16 +146,11 @@ dynamically link to the GodotEngine at runtime.
 generally takes an array of 960 pairs of floats representing 20ms of stereo audio samples at 48kHz and 
 returns 20 to 30 bytes of compressed data for that chunk.
 
-**noise-suppression-for-voice** contains a copy of the [xiph/rnnoise](https://github.com/xiph/rnnoise) 
-code in its external/rnnoise directory with the all important `CMakeLists.txt` file that makes it possible 
-to compile it on all the diffeerent platforms
-
 The sequence of commands to build the system locally
 ```bash
 nix-shell -p scons cmake ninja autoreconfHook # if you are on nix
 scons apply_patches  # optional
 scons build_opus     # build opus using cmake
-scons build_rnnoise  # build opus using cmake
 scons                # build this library
 cp addons/twovoip/libs/*.so example/addons/twovoip/libs/
 ```
@@ -167,7 +159,6 @@ To compile for another platform like web, the commands are
 ```bash
 scons apply_patches
 scons platform=web target=template_release build_opus
-scons platform=web target=template_release build_rnnoise
 scons platform=web target=template_release
 ```
 

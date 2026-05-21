@@ -128,8 +128,6 @@ void AudioEffectOpusChunked::resetencoder(bool clearbuffers) {
         speex_resampler_reset_mem(speexresampler);
     if (speexbackresampler != NULL) 
         speex_resampler_reset_mem(speexbackresampler);
-    if (st != NULL) 
-        rnnoise_init(st, NULL);        
     if (opusencoder != NULL) 
         opus_encoder_ctl(opusencoder, OPUS_RESET_STATE);
 
@@ -159,11 +157,6 @@ void AudioEffectOpusChunked::deleteencoder() {
         rc = ovrLipSync_Shutdown();
         godot::UtilityFunctions::prints("lipsync shutdown", rc); 
         govrlipsyncstatus = GovrLipSyncUninitialized;
-    }
-    
-    if (st != NULL) {
-        rnnoise_destroy(st);
-        st = NULL;
     }
 
     if (speexbackresampler != NULL) {
@@ -203,10 +196,6 @@ void AudioEffectOpusChunked::createencoder() {
         godot::UtilityFunctions::prints("Encoder timeframeopus no-resampling needed", Dtimeframeopus, "timeframeaudio", Dtimeframeaudio); 
     }
 
-    st = rnnoise_create(NULL);
-    rnnoiseframesize = rnnoise_get_frame_size();
-    rnnoise_in.resize(rnnoiseframesize);
-    rnnoise_out.resize(rnnoiseframesize);
     audiodenoisedbuffer.resize(opusframesize*ringbufferchunks);
     audiodenoisedvalues.resize(ringbufferchunks);
     lastdenoisedchunk = -1;
@@ -328,25 +317,6 @@ void AudioEffectOpusChunked::resampled_current_chunk() {
         lastresampledchunk = chunknumber;
     }
 }
-
-bool AudioEffectOpusChunked::denoiser_available() {
-    return (rnnoise_get_size() != 0);
-}
-
-float AudioEffectOpusChunked::denoise_resampled_chunk() {
-    if (!chunk_available() || (opusframesize == 0)) 
-        return -1.0;
-    resampled_current_chunk();
-    int rchunknumber = (chunknumber % ringbufferchunks);
-    if (lastdenoisedchunk < chunknumber) {
-        float* paudioresamples = (float*)audioresampledbuffer.ptrw() + rchunknumber*opusframesize*2; 
-        float* pdenoisedaudioresamples = (float*)audiodenoisedbuffer.ptrw() + rchunknumber*opusframesize*2;
-        audiodenoisedvalues[rchunknumber] = denoise_single_chunk(pdenoisedaudioresamples, paudioresamples);
-        lastdenoisedchunk = chunknumber; 
-    }
-    return audiodenoisedvalues[rchunknumber];
-}
-
 
 float AudioEffectOpusChunked::chunk_max(bool rms, bool resampled) {
     if (!chunk_available()) 
@@ -538,37 +508,6 @@ void AudioEffectOpusChunked::resample_single_chunk(float* paudioresamples, const
             paudioresamples[i] = paudiosamples[i];
     }
 }
-
-float AudioEffectOpusChunked::denoise_single_chunk(float* pdenoisedaudioresamples, const float* paudiosamples) {
-    int nnoisechunks = (int)(opusframesize/rnnoiseframesize);
-    float res = -1.0F;
-    if (nnoisechunks*rnnoiseframesize == opusframesize) {
-        float* rin = (float*)rnnoise_in.ptr();
-        float* rout = (float*)rnnoise_out.ptr();
-        for (int j = 0; j < nnoisechunks; j++) {
-            const float* p = paudiosamples + 2*j*rnnoiseframesize;
-            for (int i = 0; i < rnnoiseframesize; i++) {
-                rin[i] = (p[i*2] + p[i*2+1])*0.5F*32768.0F;
-            }
-            float r = rnnoise_process_frame(st, rout, rin);
-            if (r > res)
-                res = r;
-            float* q = pdenoisedaudioresamples + 2*j*rnnoiseframesize;
-            for (int i = 0; i < rnnoiseframesize; i++) {
-                q[i*2] = rout[i]/32768.0F;
-                q[i*2+1] = rout[i]/32768.0F;
-            }
-        }
-    } else {
-        godot::UtilityFunctions::printerr("Warning: noise framesize", rnnoiseframesize, "does not divide opusframesize", opusframesize);
-        for (int i = 0; i < opusframesize; i++) {
-            pdenoisedaudioresamples[i*2] = paudiosamples[i*2];
-            pdenoisedaudioresamples[i*2 + 1] = paudiosamples[i*2 + 1];
-        }
-    }
-    return res;
-}
-
 
 PackedByteArray AudioEffectOpusChunked::opus_frame_to_opus_packet(const PackedByteArray& prefixbytes, float* paudiosamples) {
     unsigned char* popusbytes = opusbytebuffer.ptrw(); 

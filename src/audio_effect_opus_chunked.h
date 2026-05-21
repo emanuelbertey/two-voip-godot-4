@@ -55,12 +55,6 @@
     #include "OVRLipSync_Stub.h"
 #endif
 
-#ifdef RNNOISE
-    #include "rnnoise.h"
-#else
-    #include "rnnoise_stub.h"
-#endif
-
 
 namespace godot {
     
@@ -129,13 +123,9 @@ class AudioEffectOpusChunked : public AudioEffect {
     int lastresampledchunk = -1;
     SpeexResamplerState* speexbackresampler = NULL;
 
-    DenoiseState *st = NULL;
-    int rnnoiseframesize = 0;
     PackedVector2Array audiodenoisedbuffer;  // size opusframesize*ringbufferchunks
     PackedFloat32Array audiodenoisedvalues;  // size ringbufferchunks
     int lastdenoisedchunk = -1;
-    PackedFloat32Array rnnoise_in;
-    PackedFloat32Array rnnoise_out;
 
     OpusEncoder* opusencoder = NULL;
     PackedByteArray opusbytebuffer;

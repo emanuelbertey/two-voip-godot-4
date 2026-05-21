@@ -54,12 +54,6 @@
     #include "OVRLipSync_Stub.h"
 #endif
 
-#ifdef RNNOISE
-    #include "rnnoise.h"
-#else
-    #include "rnnoise_stub.h"
-#endif
-
 
 namespace godot {
     
@@ -92,13 +86,10 @@ class TwovoipOpusEncoder : public RefCounted {
     int channels = 2;
     
     SpeexResamplerState* speex_resampler = NULL;
-    DenoiseState* rnnoise_st = NULL;
     OpusEncoder* opus_encoder = NULL;
 
     PackedFloat32Array mono_audio_frames; 
     PackedFloat32Array pre_encoded_chunk; 
-    PackedFloat32Array rnnoise_in;
-    PackedFloat32Array rnnoise_out;
     PackedByteArray opus_byte_buffer;
     
     DGovrLipSyncStatus govrlipsyncstatus = DGovrLipSyncUninitialized;
